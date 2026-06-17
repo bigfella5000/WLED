@@ -3140,9 +3140,9 @@ static const char _data_FX_MODE_ROLLINGBALLS[] PROGMEM = "Rolling Balls@!,# of b
 /  Pac-Man by Bob Loeffler with help from @dedehai and @blazoncek
 *   speed slider is for speed.
 *   intensity slider is for selecting the number of power dots.
-*   custom1 slider is for selecting the LED where the ghosts will start blinking blue.
-*   custom2 slider is for blurring the LEDs in the segment.
-*   custom3 slider is for selecting the # of ghosts (between 2 and 8).
+*   custom1 slider is for selecting the blink rate of the power dots.
+*   custom2 slider is for selecting the blink rate of the ghosts.
+*   custom3 slider is for blurring the LEDs in the segment.
 *   check1 is for displaying White Dots that PacMan eats.  Enabled will show white dots.  Disabled will not show any white dots (all leds will be black).
 *   check2 is for Smear mode (enabled will smear/persist the LED colors, disabled will not).
 *   check3 is for the Compact Dots mode of displaying white dots.  Enabled will show white dots in every LED.  Disabled will show black LEDs between the white dots.
@@ -3156,6 +3156,7 @@ typedef struct PacManChars {
   bool      direction;  // true = moving away from first LED
   bool      blue;       // used for ghosts only
   bool      eaten;      // used for power dots only
+  uint8_t   ghostBlinkPhase;
 } pacmancharacters_t;
 
 static void mode_pacman(void) {
@@ -3168,7 +3169,7 @@ static void mode_pacman(void) {
 
   unsigned maxPowerDots = min(SEGLEN / 10U, 255U);  // cap the max so packed state fits in 8 bits
   unsigned numPowerDots = map(SEGMENT.intensity, 0, 255, 1, maxPowerDots);
-  unsigned numGhosts = map(SEGMENT.custom3, 0, 31, 2, 8);
+  unsigned numGhosts = 4;
   bool smearMode = SEGMENT.check2;
 
   // Pack two 8-bit values into one 16-bit field (stored in SEGENV.aux0)
@@ -3176,7 +3177,7 @@ static void mode_pacman(void) {
   if (combined_value != SEGENV.aux0) SEGENV.call = 0;  // Reinitialize on setting change
   SEGENV.aux0 = combined_value;
 
-  // Allocate segment data
+  // Allocate segment datacus
   unsigned dataSize = sizeof(pacmancharacters_t) * (numGhosts + maxPowerDots + 1);    // +1 is the PacMan character
   if (SEGLEN <= 16 + (2*numGhosts) || !SEGENV.allocateData(dataSize)) FX_FALLBACK_STATIC;
   pacmancharacters_t *character = reinterpret_cast<pacmancharacters_t *>(SEGENV.data);
@@ -3185,9 +3186,7 @@ static void mode_pacman(void) {
   // On first call (or after settings change), `topPos` is not known yet, so fall back to the full segment length in that case.
   int maxBlinkPos = (SEGENV.call == 0) ? (int)SEGLEN - 1 : character[PACMAN].topPos;
   if (maxBlinkPos < 20) maxBlinkPos = 20;
-  int startBlinkingGhostsLED = (SEGLEN < 64)
-    ? (int)SEGLEN / 3
-    : map(SEGMENT.custom1, 0, 255, 20, maxBlinkPos);
+  int startBlinkingGhostsLED = maxBlinkPos;
 
   // Initialize characters on first call
   if (SEGENV.call == 0) {
@@ -3236,8 +3235,9 @@ static void mode_pacman(void) {
     character[i + numGhosts + 1].pos = 10 + ((i * everyXLeds) >> 8);
   }
 
-  // Blink power dots every 10 ticks
-  if (SEGENV.aux1 % 10 == 0) {
+  // Blink power dots every power_blink_rate ticks
+  uint8_t power_blink_rate = map(SEGMENT.custom1, 0, 255, 45, 1);
+  if (SEGENV.aux1 % power_blink_rate == 0) {
     uint32_t dotColor = (character[numGhosts + 1].color == ORANGEYELLOW) ? BLACK : ORANGEYELLOW;
     for (int i = 0; i < numPowerDots; i++) {
       character[i + numGhosts + 1].color = dotColor;
@@ -3245,12 +3245,13 @@ static void mode_pacman(void) {
   }
 
   // Blink blue ghosts when nearing start
-  if (SEGENV.aux1 % 15 == 0 && character[1].blue && character[PACMAN].pos <= startBlinkingGhostsLED) {
-    uint32_t ghostColor = (character[1].color == BLUE) ? WHITEISH : BLUE;
-    for (int i = 1; i <= numGhosts; i++) {
-      character[i].color = ghostColor;
+  uint8_t ghost_blink_rate = map(SEGMENT.custom2, 0, 255, 45, 1);
+    if ((SEGENV.aux1 - character[PACMAN].ghostBlinkPhase) % ghost_blink_rate == 0 && character[1].blue && character[PACMAN].pos <= startBlinkingGhostsLED) {
+        uint32_t ghostColor = (character[1].color == BLUE) ? WHITEISH : BLUE;
+        for (int i = 1; i <= numGhosts; i++) {
+        character[i].color = ghostColor;
+        }
     }
-  }
 
   // Draw uneaten power dots
   for (int i = 0; i < numPowerDots; i++) {
@@ -3273,6 +3274,7 @@ static void mode_pacman(void) {
         character[i].blue = true;
       }
       dot.eaten = true;
+      character[PACMAN].ghostBlinkPhase = SEGENV.aux1 % ghost_blink_rate;
       break; // only one power dot per frame
     }
   }
@@ -3325,9 +3327,9 @@ static void mode_pacman(void) {
     character[PACMAN].topPos = character[PACMAN].pos;
   }
 
-  SEGMENT.blur(SEGMENT.custom2>>1);
+  SEGMENT.blur(map(SEGMENT.custom3, 0, 32, 0, 255)>>1);
 }
-static const char _data_FX_MODE_PACMAN[] PROGMEM = "PacMan@Speed,# of PowerDots,Blink distance,Blur,# of Ghosts,Dots,Smear,Compact;;!;1;m12=0,sx=192,ix=64,c1=64,c2=0,c3=12,o1=1,o2=0";
+static const char _data_FX_MODE_PACMAN[] PROGMEM = "PacMan@Speed,# of PowerDots,PowerDots blink rate,Ghosts blink rate,Blur,Dots,Smear,Compact;;!;1;m12=0,sx=255,ix=64,c1=203,c2=174,c3=0,o1=1,o2=0";
 
 
 /*
