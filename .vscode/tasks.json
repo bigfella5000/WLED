@@ -1,6 +1,27 @@
 {
   "version": "2.0.0",
   "tasks": [
+
+    // Press Ctrl+Shift+B to build and upload directly to web interface
+    {
+      "version": "2.0.0",
+      "tasks": [
+          {
+              "label": "Build & Upload WLED",
+              "type": "shell",
+              "command": "python build_and_upload.py",
+              "group": {
+                  "kind": "build",
+                  "isDefault": true
+              },
+              "presentation": {
+                  "reveal": "always",
+                  "panel": "shared"
+              }
+          }
+      ]
+    },
+
     {
       "label": "Build: HTML and binary",
       "dependsOn": [
@@ -18,7 +39,7 @@
       "task": "Build",
       "group": {
         "kind": "build",
-        "isDefault": true
+        "isDefault": false
       },
       "problemMatcher": [
         "$platformio"
