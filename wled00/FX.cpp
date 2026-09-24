@@ -1439,9 +1439,15 @@ void mode_two_dots() {
   unsigned delay = 1 + (FRAMETIME<<3) / SEGLEN;  // longer segments should change faster
   uint32_t it = strip.now / map(SEGMENT.speed, 0, 255, delay<<4, delay);
   unsigned offset = it % SEGLEN;
-  unsigned width = ((SEGLEN*(SEGMENT.intensity+1))>>9); //max width is half the strip
-  if (!width) width = 1;
-  if (!SEGMENT.check2) SEGMENT.fill(SEGCOLOR(2));
+  unsigned maxWidth = ((SEGLEN*(SEGMENT.intensity+1))>>9);
+  if (!maxWidth) maxWidth = 1;
+  uint8_t pulse = beatsin8_t(60, 0, 255); // 60 BPM = one full swell per second
+  unsigned width = 1 + ((maxWidth - 1) * pulse) / 255;
+
+  // "Overlay" is now clock-driven instead of the checkbox: flips every 1000ms
+  bool overlayOn = (strip.now / 1000) & 0x01;
+  if (!overlayOn) SEGMENT.fill(SEGCOLOR(2));
+
   const uint32_t color1 = SEGCOLOR(0);
   const uint32_t color2 = (SEGCOLOR(1) == SEGCOLOR(2)) ? color1 : SEGCOLOR(1);
   for (unsigned i = 0; i < width; i++) {
