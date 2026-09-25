@@ -1435,19 +1435,49 @@ static const char _data_FX_MODE_LOADING[] PROGMEM = "Loading@!,Fade;!,!;!;;ix=16
  * Two dots running
  */
 void mode_two_dots() {
- if (SEGLEN <= 1) FX_FALLBACK_STATIC;
-  unsigned delay = 1 + (FRAMETIME<<3) / SEGLEN;  // longer segments should change faster
-  uint32_t it = strip.now / map(SEGMENT.speed, 0, 255, delay<<4, delay);
-  unsigned offset = it % SEGLEN;
-  unsigned maxWidth = ((SEGLEN*(SEGMENT.intensity+1))>>9);
-  if (!maxWidth) maxWidth = 1;
-  uint8_t pulse = beatsin8_t(60, 0, 255); // 60 BPM = one full swell per second
-  unsigned width = 1 + ((maxWidth - 1) * pulse) / 255;
+  if (SEGLEN <= 1) FX_FALLBACK_STATIC;
 
-  // "Overlay" is now clock-driven instead of the checkbox: flips every 1000ms
-  bool overlayOn = (strip.now / 1000) & 0x01;
-  if (!overlayOn) SEGMENT.fill(SEGCOLOR(2));
+  // The Speed slider sets how fast the reactor cycles through its phases
+  uint8_t rev_rate = map(SEGMENT.speed, 0, 255, 1, 25);
+  uint8_t raw_speed = (SEGMENT.check2) ? beatsin8_t(rev_rate, 15, 255) : SEGMENT.speed;
 
+  // EXPONENTIAL OVERDRIVE (Speed Curve)
+  uint16_t overdrive_speed = (raw_speed * raw_speed) >> 8; 
+  if (overdrive_speed == 0) overdrive_speed = 1;
+
+  // THE MASTER ACCUMULATOR
+  SEGENV.step += map(overdrive_speed, 0, 255, 1, 800); 
+  unsigned offset = (SEGENV.step >> 4) % SEGLEN;
+  unsigned width;
+
+  if (SEGMENT.check2) {
+    uint8_t pulse = 0; // Default state is a tiny, 1-pixel dot
+
+    // PHASE 1: CRITICAL MASS (Speeds 200 to 255)
+    // When speed hits the absolute extreme, containment breaks and the dots erupt into a blinding ring.
+    if (raw_speed > 230) {
+      pulse = map(raw_speed, 230, 255, 0, 255);
+      pulse = (pulse * pulse) >> 9; // Squaring it makes the explosion violently snap at the very end
+    } 
+    // PHASE 2: IDLE BREATHE (Speeds 15 to 80)
+    // When idling slowly, the dots are slightly wider and gently throb. 
+    // As they speed up toward 80, they shrink down into tight pinpoints.
+    else if (raw_speed < 90) {
+      pulse = map(raw_speed, 15, 90, 40, 0); 
+    }
+    // PHASE 3: CONTAINMENT (Speeds 80 to 200)
+    // If speed is between 80 and 200, neither 'if' statement triggers. 
+    // Pulse stays at 0, meaning the dots stay super tiny while whipping around extremely fast.
+    width = ((SEGLEN * (pulse + 1)) >> 8);
+  }
+  else {
+    width = ((SEGLEN*(SEGMENT.intensity+1))>>9); // Max width is half the strip
+  }
+  if (!width) width = 1;
+
+  offset = (offset + SEGLEN - (width >> 1)) % SEGLEN; // Keeps offset at center of dots (needed for pulse to work correctly)
+  
+  SEGMENT.fill(SEGCOLOR(2));
   const uint32_t color1 = SEGCOLOR(0);
   const uint32_t color2 = (SEGCOLOR(1) == SEGCOLOR(2)) ? color1 : SEGCOLOR(1);
   for (unsigned i = 0; i < width; i++) {
