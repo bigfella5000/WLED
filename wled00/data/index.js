@@ -298,6 +298,13 @@ function onLoad()
 			else await loadPresets();    // load and populate presets
 			if (cfg.comp.css) await loadSkinCSS('skinCss');
 			if (!ws) makeWS();
+			// Auto-enable Peek (Liveview) on load
+			setTimeout(() => {
+				// Only toggle it on if it isn't already active
+				if (typeof isLv !== 'undefined' && !isLv) {
+				toggleLiveview();
+				}
+			}, 400);
 		} catch(e) {
 			showToast("Init failed: " + e, true);
 		}

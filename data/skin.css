@@ -1,0 +1,15 @@
+#bg {
+	background-size: 600px;
+	background-position: 68% 85%;
+	background-repeat: no-repeat;
+	opacity: 1 !important;   /* !important is needed to beat the inline style WLED sets from the settings slider */
+}
+
+body {
+	background-image:
+		linear-gradient(rgba(0,0,0,.75), rgba(0,0,0,.75)),
+		url('/spiral.gif');
+	background-size: cover, 100%;
+	background-position: center, center;
+	background-repeat: no-repeat, no-repeat;
+}
